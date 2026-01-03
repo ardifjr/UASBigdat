@@ -385,6 +385,7 @@
                 <canvas id="vitalsChart"></canvas>
             </div>
 
+
             <div class="alerts-container">
                 <h2>Alert Monitor</h2>
                 <div id="alertsList">
@@ -392,6 +393,28 @@
                 </div>
             </div>
         </div>
+
+        
+            
+            <!-- ML Insights -->
+            <div class="ml-insights" style="margin-bottom:18px;">
+                <h2 style="color:white; margin-bottom:12px;">ML Insights</h2>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:stretch;">
+                    <div style="flex:0 0 270px; min-width:270px; background:linear-gradient(180deg,#fff,#fbfbff); padding:12px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.06);">
+                        <canvas id="statusPieChart"></canvas>
+                        <p>Distribusi status pasien saat ini: jumlah pasien yang diklasifikasikan sebagai Critical, Warning, atau Normal.</p>
+                    </div>
+                    <div style="flex:1.6 1 0; min-width:320px; background:linear-gradient(180deg,#fff,#fbfbff); padding:12px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.06);">
+                        <canvas id="anomalyBarChart"></canvas>
+                        <p>Jumlah anomali terdeteksi berdasarkan status pasien: Critical, Warning, atau Normal.</p>
+                    </div>
+                    <div style="flex:1.6 1 0; min-width:320px; background:linear-gradient(180deg,#fff,#fbfbff); padding:12px; border-radius:10px; box-shadow:0 6px 18px rgba(2,6,23,0.06);">
+                        <canvas id="clusterBarChart"></canvas>
+                        <div id="clusterDescriptions" style="font-size:12px; color:#374151; margin-top:10px;"></div>
+                        <p>Ringkasan cluster: menunjukkan kelompok pengukuran vital yang mirip; centroid memberi nilai rata‑rata HR/SYS/DIA tiap cluster.</p> 
+                    </div>
+                </div>
+            </div>
 
         <div class="patients-table">
             <h2>Patient Monitoring - Live Data</h2>
@@ -671,12 +694,73 @@
                 .catch(err => console.error('Error updating table:', err));
         }
 
+        // ML Insights charts
+        const statusCtx = (document.getElementById('statusPieChart') || document.createElement('canvas')).getContext?.('2d');
+        let statusPieChart = null;
+        if (statusCtx) {
+            statusPieChart = new Chart(statusCtx, {
+                type: 'doughnut',
+                data: { labels: ['Critical','Warning','Normal'], datasets: [{ data: [0,0,0], backgroundColor: ['#ef4444','#f59e0b','#10b981'] }] },
+                options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+
+        const anomalyCtx = (document.getElementById('anomalyBarChart') || document.createElement('canvas')).getContext?.('2d');
+        let anomalyBarChart = null;
+        if (anomalyCtx) {
+            anomalyBarChart = new Chart(anomalyCtx, {
+                type: 'bar',
+                data: { labels: ['Critical','Warning','Normal'], datasets: [{ label: 'Anomalies', data: [0,0,0], backgroundColor: ['#fca5a5','#fde68a','#bbf7d0'] }] },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        const clusterCtx = (document.getElementById('clusterBarChart') || document.createElement('canvas')).getContext?.('2d');
+        let clusterBarChart = null;
+        if (clusterCtx) {
+            clusterBarChart = new Chart(clusterCtx, { type: 'bar', data: { labels: [], datasets: [{ label: 'Cluster sizes', data: [], backgroundColor: '#c7b8ff' }] }, options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+        }
+
+        function updateMLInsights() {
+            fetch('/api/ml_insights')
+                .then(res => res.json())
+                .then(data => {
+                    if (statusPieChart && data.status_counts) {
+                        statusPieChart.data.datasets[0].data = [data.status_counts.Critical || 0, data.status_counts.Warning || 0, data.status_counts.Normal || 0];
+                        statusPieChart.update('none');
+                    }
+                    if (anomalyBarChart && data.anomalies_by_status) {
+                        anomalyBarChart.data.datasets[0].data = [data.anomalies_by_status.Critical || 0, data.anomalies_by_status.Warning || 0, data.anomalies_by_status.Normal || 0];
+                        anomalyBarChart.update('none');
+                    }
+                    if (clusterBarChart) {
+                        if (Array.isArray(data.cluster_info) && data.cluster_info.length > 0) {
+                            clusterBarChart.data.labels = data.cluster_info.map(ci => `${ci.label} (n=${ci.count})`);
+                            clusterBarChart.data.datasets[0].data = data.cluster_info.map(ci => ci.count);
+
+                            const descEl = document.getElementById('clusterDescriptions');
+                            if (descEl) {
+                                descEl.innerHTML = data.cluster_info.map(ci => `<div style="margin-bottom:6px;"><strong>${ci.label} (Cluster ${ci.index})</strong> — HR ${ci.avg_heart_rate} / SYS ${ci.avg_systolic} / DIA ${ci.avg_diastolic} (n=${ci.count})</div>`).join('');
+                            }
+                        } else if (Array.isArray(data.cluster_sizes)) {
+                            clusterBarChart.data.labels = data.cluster_sizes.map((_,i)=> 'C'+(i+1));
+                            clusterBarChart.data.datasets[0].data = data.cluster_sizes;
+                            const descEl = document.getElementById('clusterDescriptions');
+                            if (descEl) descEl.innerHTML = '';
+                        }
+                        clusterBarChart.update('none');
+                    }
+                })
+                .catch(err => console.error('Error updating ML insights:', err));
+        }
+
         // Update all data every second
         setInterval(() => {
             updateStatistics();
             updateChart();
             updateAlerts();
             updatePatientsTable();
+            updateMLInsights();
         }, 1000);
 
         // Initial load
@@ -684,6 +768,7 @@
         updateChart();
         updateAlerts();
         updatePatientsTable();
+        updateMLInsights();
 
 
     </script>

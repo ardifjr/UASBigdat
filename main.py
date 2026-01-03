@@ -268,6 +268,91 @@ def get_statistics():
 def get_alerts():
     return jsonify(list(alerts))
 
+@app.route('/api/ml_insights')
+def get_ml_insights():
+    """Return ML-derived summaries for frontend charts."""
+    all_data = list(latest_data)
+
+    # Status counts
+    status_counts = {"Critical": 0, "Warning": 0, "Normal": 0}
+    for d in all_data:
+        st = d.get('status')
+        if st in status_counts:
+            status_counts[st] += 1
+
+    # Anomaly counts overall and by status
+    anomaly_count = sum(1 for d in all_data if d.get('is_anomaly'))
+    anomalies_by_status = {"Critical": 0, "Warning": 0, "Normal": 0}
+    for d in all_data:
+        if d.get('is_anomaly'):
+            st = d.get('status')
+            if st in anomalies_by_status:
+                anomalies_by_status[st] += 1
+
+    # KMeans cluster sizes and descriptive summaries on recent points (if available)
+    cluster_sizes = []
+    cluster_info = []
+    try:
+        if len(all_data) >= 5:
+            features = [[d['heart_rate'], d['systolic'], d['diastolic']] for d in all_data[-50:]]
+            # normalize
+            import numpy as _np
+            arr = _np.array(features)
+            m = arr.mean(axis=0)
+            s = arr.std(axis=0)
+            s[s == 0] = 1
+            normalized = ((_np.array(features) - m) / s).tolist()
+            k = min(4, max(2, len(normalized)//5))
+            kmeans = SimpleKMeans(k=k)
+            labels = kmeans.fit_predict(normalized)
+            sizes = {i: labels.count(i) for i in set(labels)}
+            ordered_idxs = sorted(sizes.keys())
+            cluster_sizes = [sizes.get(i, 0) for i in ordered_idxs]
+
+            # Map centroids back to original feature scale and create descriptive labels
+            centroids = getattr(kmeans, 'centroids', []) or []
+            for idx_i, i in enumerate(ordered_idxs):
+                count = sizes.get(i, 0)
+                centroid_norm = _np.array(centroids[idx_i]) if idx_i < len(centroids) else _np.array([0,0,0])
+                centroid_orig = (centroid_norm * s) + m
+                hr = float(round(float(centroid_orig[0]), 1))
+                sysv = float(round(float(centroid_orig[1]), 1))
+                dia = float(round(float(centroid_orig[2]), 1))
+
+                # Simple descriptive rules (not a clinical diagnosis)
+                if hr >= 120 or sysv >= 150 or dia >= 95:
+                    label = "High-risk"
+                elif hr >= 100 or sysv >= 140 or dia >= 90:
+                    label = "Elevated"
+                else:
+                    label = "Normal-like"
+
+                summary = f"{label} — HR {hr} / SYS {sysv} / DIA {dia} (n={count})"
+                cluster_info.append({
+                    "index": idx_i + 1,
+                    "count": count,
+                    "avg_heart_rate": hr,
+                    "avg_systolic": sysv,
+                    "avg_diastolic": dia,
+                    "label": label,
+                    "summary": summary
+                })
+    except Exception:
+        cluster_sizes = []
+        cluster_info = []
+
+
+    return jsonify({
+        "status_counts": status_counts,
+        "anomaly_count": anomaly_count,
+        "anomalies_by_status": anomalies_by_status,
+        "cluster_sizes": cluster_sizes,
+        "cluster_info": cluster_info,
+        "avg_heart_rate": statistics.get('avg_heart_rate', 0),
+        "avg_systolic": statistics.get('avg_systolic', 0),
+        "avg_diastolic": statistics.get('avg_diastolic', 0)
+    })
+
 @app.route('/api/status')
 def get_status():
     return jsonify({

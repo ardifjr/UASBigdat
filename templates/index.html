@@ -188,7 +188,7 @@
             padding: 25px;
             border-radius: 15px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            max-height: 600px;
+            max-height: 700px;
             overflow-y: auto;
         }
 
@@ -197,8 +197,11 @@
             margin-bottom: 10px;
             border-radius: 10px;
             border-left: 5px solid;
-            animation: slideIn 0.5s;
+            /* smooth transition for incremental updates */
+            transition: opacity 220ms ease, transform 220ms ease;
         }
+
+        .alert-item.removing { opacity: 0; transform: translateY(-8px); }
 
         @keyframes slideIn {
             from {
@@ -507,30 +510,126 @@
                 .then(res => res.json())
                 .then(alerts => {
                     const alertsList = document.getElementById('alertsList');
-                    
-                    if (alerts.length === 0) {
+
+                    // Keep only recent 15 alerts, newest first
+                    const newAlerts = alerts.slice(-15).reverse();
+
+                    // Prepare map to track existing elements
+                    alertsList._map = alertsList._map || new Map();
+                    const existingMap = alertsList._map;
+
+                    function makeId(a) {
+                        return 'a-' + (new Date(a.timestamp).getTime()) + '-' + String(a.patient_name || '').replace(/\s+/g,'_');
+                    }
+
+                    // If nothing changed (same IDs in same order), do nothing to avoid flicker
+                    const newIdsArr = newAlerts.map(a => makeId(a));
+                    const existingIdsArr = Array.from(existingMap.keys());
+                    if (newIdsArr.length === existingIdsArr.length && newIdsArr.every((id, idx) => id === existingIdsArr[idx])) {
+                        // Still check for content changes (timestamps might be same) - do a lightweight check
+                        let changed = false;
+                        for (let i = 0; i < newAlerts.length; i++) {
+                            const el = existingMap.get(newIdsArr[i]);
+                            if (!el) { changed = true; break; }
+                            const detailsEl = el.querySelector('.alert-details');
+                            const tsText = new Date(newAlerts[i].timestamp).toLocaleString();
+                            if (!detailsEl || detailsEl.textContent.indexOf(tsText) === -1) { changed = true; break; }
+                        }
+                        if (!changed) return; // nothing to do
+                    }
+
+                    // If server returns empty and we already have items, keep them (avoid flicker)
+                    if (newAlerts.length === 0 && existingMap.size > 0) {
+                        return;
+                    }
+
+                    if (newAlerts.length === 0 && existingMap.size === 0) {
                         alertsList.innerHTML = '<div class="no-data">No alerts</div>';
                         return;
                     }
 
-                    alertsList.innerHTML = alerts.slice(-15).reverse().map(alert => {
-                        const alertClass = alert.is_anomaly ? 'anomaly' : alert.status.toLowerCase();
+                    const newIds = new Set();
+
+                    // Create or move elements in order
+                    newAlerts.forEach(alert => {
+                        const id = makeId(alert);
+                        newIds.add(id);
+
+                        let el = existingMap.get(id);
+                        const alertClass = alert.is_anomaly ? 'anomaly' : (alert.status || '').toLowerCase();
                         const anomalyBadge = alert.is_anomaly ? '<span class="anomaly-badge">ANOMALY</span>' : '';
-                        
-                        return `
-                            <div class="alert-item ${alertClass}">
+
+                        if (!el) {
+                            el = document.createElement('div');
+                            el.className = 'alert-item ' + alertClass;
+                            el.dataset.alertId = id;
+                            el.innerHTML = `
                                 <div class="alert-title">
-                                    <span>${alert.patient_name} ${anomalyBadge}</span>
+                                    <span class="name">${alert.patient_name} ${anomalyBadge}</span>
                                     <span class="status-indicator status-${alert.status}">${alert.status}</span>
                                 </div>
                                 <div class="alert-details">
-                                    📍 ${alert.room}<br>
-                                    ⚠️ Risk Score: ${alert.risk_score}<br>
-                                    🕒 ${new Date(alert.timestamp).toLocaleString()}
+                                    ${alert.room}<br>
+                                    Risk Score: ${alert.risk_score}<br>
+                                    ${new Date(alert.timestamp).toLocaleString()}
                                 </div>
-                            </div>
-                        `;
-                    }).join('');
+                            `;
+
+                            // initial state for smooth entrance
+                            el.style.opacity = '0';
+                            el.style.transform = 'translateY(8px)';
+
+                            existingMap.set(id, el);
+
+                            // Append element (new ones go to the end; we will reorder below)
+                            alertsList.appendChild(el);
+
+                            // animate in
+                            requestAnimationFrame(() => {
+                                el.style.transition = 'opacity 220ms ease, transform 220ms ease';
+                                el.style.opacity = '1';
+                                el.style.transform = 'translateY(0)';
+                            });
+                        } else {
+                            // update classes & content if changed (in-place updates)
+                            el.className = 'alert-item ' + alertClass;
+                            const nameEl = el.querySelector('.name');
+                            if (nameEl && nameEl.textContent !== alert.patient_name) nameEl.textContent = alert.patient_name;
+                            const detailsEl = el.querySelector('.alert-details');
+                            const tsText = new Date(alert.timestamp).toLocaleString();
+                            if (detailsEl && detailsEl.textContent.indexOf(tsText) === -1) {
+                                detailsEl.innerHTML = `${alert.room}<br>Risk Score: ${alert.risk_score}<br>${tsText}`;
+                            }
+                        }
+                    });
+
+                    // Reorder DOM elements to match newAlerts sequence without clearing
+                    let cursor = null;
+                    newAlerts.forEach(alert => {
+                        const id = makeId(alert);
+                        const el = existingMap.get(id);
+                        if (!el) return;
+                        if (cursor === null) {
+                            // first element - insert before first child
+                            if (alertsList.firstChild !== el) alertsList.insertBefore(el, alertsList.firstChild);
+                            cursor = el;
+                        } else {
+                            if (cursor.nextSibling !== el) alertsList.insertBefore(el, cursor.nextSibling);
+                            cursor = el;
+                        }
+                    });
+
+                    // Remove any old alerts that are no longer in new set
+                    for (const [key, el] of Array.from(existingMap.entries())) {
+                        if (!newIds.has(key)) {
+                            el.classList.add('removing');
+                            setTimeout(() => {
+                                try { el.remove(); } catch (e) {}
+                                existingMap.delete(key);
+                            }, 260);
+                        }
+                    }
+
                 })
                 .catch(err => console.error('Error updating alerts:', err));
         }

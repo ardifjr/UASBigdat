@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital Vital Signs Monitoring - Real-time ML Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --header-height: 96px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background:
+                linear-gradient(135deg, #f3f6f9 0%, #e9eef7 100%),
+                radial-gradient(circle at 10% 10%, rgba(102,126,234,0.02), transparent 15%),
+                radial-gradient(circle at 90% 90%, rgba(118,75,162,0.02), transparent 15%);
+            background-attachment: fixed;
+            color: #102a43;
+            min-height: 100vh;
+            padding: 20px;
+            padding-top: calc(var(--header-height) + 20px);
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            --header-height: 96px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            z-index: 1000;
+            background: rgba(255,255,255,0.75);
+            backdrop-filter: blur(6px);
+            padding: 20px 28px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            margin-bottom: 0;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #0f172a;
+            font-size: 1.8em;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #334155;
+            font-size: 0.95em;
+            margin-bottom: 0;
+            opacity: 0.9;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .status-live {
+            background: #4ade80;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        @media (max-width: 640px) {
+            :root { --header-height: 82px; }
+            .header { padding: 14px 16px; }
+            .header h1 { font-size: 1.2em; }
+            body { padding-top: calc(var(--header-height) + 16px); }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .stat-card h3 {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-card.critical .stat-value { color: #ef4444; }
+        .stat-card.warning .stat-value { color: #f59e0b; }
+        .stat-card.normal .stat-value { color: #10b981; }
+        .stat-card.total .stat-value { color: #667eea; }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .chart-container h2 {
+            margin-bottom: 20px;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .alerts-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            border-left: 5px solid;
+            animation: slideIn 0.5s;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .alert-item.critical {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+
+        .alert-item.warning {
+            background: #fef3c7;
+            border-color: #f59e0b;
+        }
+
+        .alert-item.anomaly {
+            background: #ddd6fe;
+            border-color: #8b5cf6;
+        }
+
+        .alert-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .alert-details {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .patients-table {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }
+
+        .status-Critical {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .status-Warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-Normal {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .anomaly-badge {
+            background: #8b5cf6;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            margin-left: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.2em;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #5568d3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Hospital Vital Signs Monitoring System</h1>
+            <p>Real-time Machine Learning Dashboard with Predictive Analytics & Anomaly Detection</p>
+            <span class="status-badge status-live">● LIVE</span>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card total">
+                <h3>Total Patients</h3>
+                <div class="stat-value" id="totalPatients">0</div>
+                <p>Currently monitored</p>
+            </div>
+            <div class="stat-card critical">
+                <h3>Critical</h3>
+                <div class="stat-value" id="criticalCount">0</div>
+                <p>Requires immediate attention</p>
+            </div>
+            <div class="stat-card warning">
+                <h3>Warning</h3>
+                <div class="stat-value" id="warningCount">0</div>
+                <p>Needs monitoring</p>
+            </div>
+            <div class="stat-card normal">
+                <h3>Normal</h3>
+                <div class="stat-value" id="normalCount">0</div>
+                <p>Stable condition</p>
+            </div>
+        </div>
+
+        <div class="main-grid">
+            <div class="chart-container">
+                <h2>Real-time Vital Signs Trends</h2>
+                <canvas id="vitalsChart"></canvas>
+            </div>
+
+            <div class="alerts-container">
+                <h2>Alert Monitor</h2>
+                <div id="alertsList">
+                    <div class="no-data">Waiting for alerts...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="patients-table">
+            <h2>Patient Monitoring - Live Data</h2>
+            <div style="overflow-x: auto;">
+                <table id="patientsTable">
+                    <thead>
+                        <tr>
+                            <th>Patient ID</th>
+                            <th>Name</th>
+                            <th>Room</th>
+                            <th>Heart Rate</th>
+                            <th>Blood Pressure</th>
+                            <th>Status</th>
+                            <th>Risk Score</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="patientsBody">
+                        <tr>
+                            <td colspan="8" class="loading">Loading patient data...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chart setup
+        const ctx = document.getElementById('vitalsChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Heart Rate',
+                        data: [],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Systolic BP',
+                        data: [],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Diastolic BP',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 200
+                    }
+                }
+            }
+        });
+
+        // Update functions
+        function updateStatistics() {
+            fetch('/api/statistics')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('totalPatients').textContent = data.total_patients || 0;
+                    document.getElementById('criticalCount').textContent = data.critical_count || 0;
+                    document.getElementById('warningCount').textContent = data.warning_count || 0;
+                    document.getElementById('normalCount').textContent = data.normal_count || 0;
+                })
+                .catch(err => console.error('Error fetching statistics:', err));
+        }
+
+        function updateChart() {
+            fetch('/api/latest_data')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.length === 0) return;
+
+                    const recentData = data.slice(-20);
+                    const labels = recentData.map(d => {
+                        const time = new Date(d.timestamp);
+                        return time.toLocaleTimeString();
+                    });
+
+                    chart.data.labels = labels;
+                    chart.data.datasets[0].data = recentData.map(d => d.heart_rate);
+                    chart.data.datasets[1].data = recentData.map(d => d.systolic);
+                    chart.data.datasets[2].data = recentData.map(d => d.diastolic);
+                    chart.update('none');
+                })
+                .catch(err => console.error('Error updating chart:', err));
+        }
+
+        function updateAlerts() {
+            fetch('/api/alerts')
+                .then(res => res.json())
+                .then(alerts => {
+                    const alertsList = document.getElementById('alertsList');
+                    
+                    if (alerts.length === 0) {
+                        alertsList.innerHTML = '<div class="no-data">No alerts</div>';
+                        return;
+                    }
+
+                    alertsList.innerHTML = alerts.slice(-15).reverse().map(alert => {
+                        const alertClass = alert.is_anomaly ? 'anomaly' : alert.status.toLowerCase();
+                        const anomalyBadge = alert.is_anomaly ? '<span class="anomaly-badge">ANOMALY</span>' : '';
+                        
+                        return `
+                            <div class="alert-item ${alertClass}">
+                                <div class="alert-title">
+                                    <span>${alert.patient_name} ${anomalyBadge}</span>
+                                    <span class="status-indicator status-${alert.status}">${alert.status}</span>
+                                </div>
+                                <div class="alert-details">
+                                    ${alert.room}<br>
+                                    Risk Score: ${alert.risk_score}<br>
+                                    ${new Date(alert.timestamp).toLocaleString()
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                })
+                .catch(err => console.error('Error updating alerts:', err));
+        }
+
+        function updatePatientsTable() {
+            fetch('/api/latest_data')
+                .then(res => res.json())
+                .then(data => {
+                    const tbody = document.getElementById('patientsBody');
+                    
+                    if (data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No patient data yet</td></tr>';
+                        return;
+                    }
+
+                    const uniquePatients = {};
+                    data.forEach(d => {
+                        uniquePatients[d.patient_id] = d;
+                    });
+
+                    const recentPatients = Object.values(uniquePatients).slice(-15);
+
+                    tbody.innerHTML = recentPatients.map(patient => `
+                        <tr>
+                            <td>${patient.patient_id}</td>
+                            <td>${patient.patient_name}</td>
+                            <td>${patient.room}</td>
+                            <td>${patient.heart_rate} bpm</td>
+                            <td>${patient.systolic}/${patient.diastolic} mmHg</td>
+                            <td>
+                                <span class="status-indicator status-${patient.status}">${patient.status}</span>
+                                ${patient.is_anomaly ? '<span class="anomaly-badge">⚠️</span>' : ''}
+                            </td>
+                            <td>${patient.risk_score}</td>
+                            <td>${new Date(patient.timestamp).toLocaleString()}</td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(err => console.error('Error updating table:', err));
+        }
+
+        // Update all data every second
+        setInterval(() => {
+            updateStatistics();
+            updateChart();
+            updateAlerts();
+            updatePatientsTable();
+        }, 1000);
+
+        // Initial load
+        updateStatistics();
+        updateChart();
+        updateAlerts();
+        updatePatientsTable();
+    </script>
+</body>
+</html>

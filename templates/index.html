@@ -13,115 +13,115 @@
         }
 
         :root {
-            --header-height: 96px;
+            --header-height: 88px;
         }
+
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #071028 0%, #0f1724 60%, #08203a 100%), radial-gradient(circle at 10% 10%, rgba(255,255,255,0.02), transparent 20%);
-            background-attachment: fixed;
-            color: #102a43;
+            color: #333;
             min-height: 100vh;
             padding: 20px;
             padding-top: calc(var(--header-height) + 20px);
         }
 
+        /* Hide native page scrollbar (still scrollable) */
+        html, body {
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* Internet Explorer 10+ */
+        }
+        ::-webkit-scrollbar { width: 0; height: 0; }
+        
+        /* Ensure internal scrollable elements still show thin scroll where needed */
+        .alerts-container::-webkit-scrollbar, .patients-table::-webkit-scrollbar {
+            width: 8px;
+        }
+        .alerts-container::-webkit-scrollbar-thumb, .patients-table::-webkit-scrollbar-thumb {
+            background: #667eea; border-radius: 10px;
+        }
+
         .container {
             max-width: 1800px;
             margin: 0 auto;
-            padding-top: 12px; /* extra spacing from fixed header */
+            margin-top: 20px; /* increased gap below the header */
             padding-left: 18px;
             padding-right: 18px;
         }
 
-        /* Header layout with three sections: left / center / right */
         .header {
-            --header-height: 96px;
+            --header-height: 88px;
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             width: 100%;
             z-index: 1000;
-            background: rgba(255, 255, 255, 1);
-            backdrop-filter: blur(6px);
-            padding: 12px 28px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-            margin-bottom: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.995), rgba(250,250,255,0.995));
+            backdrop-filter: saturate(120%) blur(8px);
+            padding: 16px 28px;
+            box-shadow: 0 10px 30px rgba(8,15,35,0.08);
+            border-radius: 0 0 12px 12px; /* rounded bottom only */
+            border-bottom: 1px solid rgba(99,102,241,0.06);
+            transition: box-shadow 0.18s ease;
         }
 
+        .header:hover { box-shadow: 0 16px 38px rgba(8,15,35,0.10); }
+
         .header-inner {
-            max-width: 1800px;
-            margin: 0 auto;
+            width: 100%;
+            padding: 0 32px; /* align content */
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 20px;
-            width: 100%;
+            gap: 24px;
         }
 
-        .header-left { text-align: left; flex: 1 1 320px; }
-        .header-center { text-align: center; flex: 1 1 360px; }
-        .header-right { text-align: right; flex: 0 0 auto; display:flex; align-items:center; gap:12px; }
+        .header-left { text-align: left; flex: 1; }
+        .header-center { text-align: center; flex: 1; }
+        .header-right { text-align: right; flex: 1; display:flex; align-items:center; justify-content:flex-end; gap:12px; }
 
-        .subtitle { color: #334155; font-size: 0.95em; margin-top: 4px; opacity: 0.9; }
+        .subtitle { color: #475569; font-size: 0.95em; margin-top: 4px; opacity: 0.95; }
         .center-note { color: #475569; font-size: 0.95em; opacity: 0.95; }
 
-        @media (max-width: 880px) {
-            .header-inner { gap: 12px; }
-            .header-left, .header-center { flex: 1 1 220px; }
-            .center-note { font-size: 0.9em; }
-        }
+
 
         @media (max-width: 640px) {
             :root { --header-height: 120px; }
-            .header { padding: 14px 16px; }
-            .header-inner { flex-direction: column; align-items: stretch; text-align: center; gap: 8px; }
+            .header { top: 0; left: 0; right: 0; width: 100%; padding: 12px 16px; border-radius: 0 0 10px 10px; }
+            .header-inner { flex-direction: column; align-items: stretch; text-align: center; gap: 8px; padding: 8px 12px; }
             .header-left, .header-center, .header-right { text-align: center; }
             .header-right { justify-content: center; }
             .header h1 { font-size: 1.2em; }
-            body { padding-top: calc(var(--header-height) + 16px); }
+            body { padding-top: calc(var(--header-height) + 20px); }
         }
 
-        .header h1 {
-            color: #0f172a;
-            font-size: 1.8em;
-            margin-bottom: 6px;
-            font-weight: 700;
-        }
 
-        .header p {
-            color: #334155;
-            font-size: 0.95em;
-            margin-bottom: 0;
-            opacity: 0.9;
-        }
+        .header h1 { color: #0f172a; font-size: 1.6em; margin-bottom: 6px; font-weight:700; }
+
+        .header p { color: #475569; font-size: 0.95em; margin-bottom: 0; opacity: 0.95; }
 
         .status-badge {
             display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: bold;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 0.85em;
+            font-weight: 700;
+            background: linear-gradient(90deg, #06b6d4, #6366f1);
+            color: #fff;
+            box-shadow: 0 6px 18px rgba(99,102,241,0.12);
             margin-left: 10px;
+            letter-spacing: 0.2px;
         }
 
-        .status-live {
-            background: #4ade80;
-            color: white;
-            animation: pulse 2s infinite;
+        .status-live { /* gentle pulse */
+            animation: pulse 2.6s infinite;
+            opacity: 0.98;
         }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
-        }
-
-        @media (max-width: 640px) {
-            :root { --header-height: 82px; }
-            .header { padding: 14px 16px; }
-            .header h1 { font-size: 1.2em; }
-            body { padding-top: calc(var(--header-height) + 16px); }
         }
 
         .stats-grid {
@@ -132,23 +132,16 @@
         }
 
         .stat-card {
-            background: linear-gradient(180deg, #ffffff, #f7f9fc);
+            background: white;
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 5px 18px rgba(16,42,67,0.06);
-            border: 1px solid rgba(16,42,67,0.04);
-            transition: transform 0.28s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
         }
 
-        /* Variant tints for quick scanning */
-        .stat-card.total { background: linear-gradient(180deg, #eef2ff, #f6f8ff); border-color: rgba(102,126,234,0.12); }
-        .stat-card.critical { background: linear-gradient(180deg, #fff1f0, #fff7f7); border-color: rgba(239,68,68,0.12); }
-        .stat-card.warning { background: linear-gradient(180deg, #fff7ed, #fffbf6); border-color: rgba(245,158,11,0.12); }
-        .stat-card.normal { background: linear-gradient(180deg, #ecfdf5, #f9fffb); border-color: rgba(16,185,129,0.12); }
-
         .stat-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 12px 30px rgba(16,42,67,0.08);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         }
 
         .stat-card h3 {
@@ -177,11 +170,10 @@
         }
 
         .chart-container {
-            background: linear-gradient(180deg, #ffffff, #f6fafc);
+            background: white;
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 6px 20px rgba(16,42,67,0.06);
-            border: 1px solid rgba(16,42,67,0.04);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
         .chart-container h2 {
@@ -192,11 +184,10 @@
         }
 
         .alerts-container {
-            background: linear-gradient(180deg, #fffefc, #fffaf7);
+            background: white;
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 6px 22px rgba(16,42,67,0.06);
-            border: 1px solid rgba(16,42,67,0.04);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             max-height: 600px;
             overflow-y: auto;
         }
@@ -249,11 +240,10 @@
         }
 
         .patients-table {
-            background: linear-gradient(180deg, #ffffff, #fbfdff);
+            background: white;
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 6px 18px rgba(16,42,67,0.06);
-            border: 1px solid rgba(16,42,67,0.04);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         }
 
         table {
@@ -356,8 +346,10 @@
                 </div>
 
                 <div class="header-right">
-                    <span class="status-badge status-live">LIVE</span>
-                </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <span class="status-badge status-live">LIVE</span>
+                    </div>
+                </div> 
             </div>
         </div>
 
@@ -532,9 +524,9 @@
                                     <span class="status-indicator status-${alert.status}">${alert.status}</span>
                                 </div>
                                 <div class="alert-details">
-                                    ${alert.room}<br>
-                                    Risk Score: ${alert.risk_score}<br>
-                                    ${new Date(alert.timestamp).toLocaleString()
+                                    📍 ${alert.room}<br>
+                                    ⚠️ Risk Score: ${alert.risk_score}<br>
+                                    🕒 ${new Date(alert.timestamp).toLocaleString()}
                                 </div>
                             </div>
                         `;
@@ -593,6 +585,8 @@
         updateChart();
         updateAlerts();
         updatePatientsTable();
+
+
     </script>
 </body>
 </html>
